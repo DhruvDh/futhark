@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
   * Source location now correct for unknown infix operators.
 
+  * Function parameters are no longer in scope of themselves (#798).
+
+  * Fixed a nasty out-of-bounds error in handling of irregular allocations.
+
 ## [0.12.1]
 
 ### Added
