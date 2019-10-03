@@ -18,7 +18,7 @@
 let brownianBridgeDates [num_dates]
                         (bb_inds: [3][num_dates]i32)
                         (bb_data: [3][num_dates]f64)
-                        (gauss: [num_dates]f64): []f64 =
+                        (gauss: [num_dates]f64): [num_dates]f64 =
     let bi = bb_inds[0]
     let li = bb_inds[1]
     let ri = bb_inds[2]

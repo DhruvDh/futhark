@@ -20,9 +20,10 @@ let Gauss_Jordan [n][m] (A: [n][m]f32): [n][m]f32 =
 
 let matrix_inverse [n] (A: [n][n]f32): [n][n]f32 =
   -- Pad the matrix with the identity matrix.
+  let n2 = n + n
   let on_row row i = let padding = replicate n 0.0
                      let padding[i] = 1f32
-                     in concat row padding
+                     in concat row padding : [n2]f32
   let Ap = map2 on_row A (iota n)
   let Ap' = Gauss_Jordan Ap
   -- Drop the identity matrix at the front.

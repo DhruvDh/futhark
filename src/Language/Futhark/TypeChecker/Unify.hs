@@ -33,6 +33,7 @@ import Debug.Trace
 import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Writer hiding (Sum)
+import Data.Bifoldable (biany)
 import Data.Bitraversable
 import Data.List
 import Data.Loc
@@ -204,6 +205,7 @@ unify :: MonadUnify m => Usage -> StructType -> StructType -> m ()
 unify usage orig_t1 orig_t2 = do
   orig_t1' <- normaliseType orig_t1
   orig_t2' <- normaliseType orig_t2
+  let msg = unlines ["unify", pretty orig_t1', pretty orig_t2']
   breadCrumb (MatchingTypes orig_t1' orig_t2') $ subunify mempty orig_t1 orig_t2
   where
     subunify bound t1 t2 = do
@@ -235,7 +237,7 @@ unify usage orig_t1 orig_t2 = do
             " and " ++ quote (pretty d2) ++ " do not match."
 
           link v t
-            | Just d <- find (`elem` bound) $ S.toList $ typeDimNames t =
+            | False, Just d <- find (`elem` bound) $ S.toList $ typeDimNames t =
                 typeError usage $ "Dimension " ++ quote (prettyName d) ++ " bound in type."
             | otherwise = linkVarToType usage v t
 
@@ -282,7 +284,15 @@ unify usage orig_t1 orig_t2 = do
                       let f v | v == p2' = Just $ SizeSubst $ NamedDim $ qualName p1'
                               | otherwise = Nothing
                       in (b1, applySubst f b2)
-                    _ ->
+                    (Named p1', Unnamed) ->
+                      let f v | v == p1' = Just $ SizeSubst AnyDim
+                              | otherwise = Nothing
+                      in (applySubst f b1, b2)
+                    (Unnamed, Named p2') ->
+                      let f v | v == p2' = Just $ SizeSubst AnyDim
+                              | otherwise = Nothing
+                      in (b1, applySubst f b2)
+                    (Unnamed, Unnamed) ->
                       (b1, b2)
 
                 bound' = bound <> mapMaybe pname [p1, p2]
@@ -325,9 +335,15 @@ applySubstInConstraint vn (SizeSubst v') (Size (Just (NamedDim v)) loc)
 applySubstInConstraint _ _ (Size v loc) = Size v loc
 applySubstInConstraint _ _ (UnknowableSize loc) = UnknowableSize loc
 
+hasEmptyDims :: StructType -> Bool
+hasEmptyDims = biany empty (const False)
+  where empty AnyDim = True
+        empty _ = False
+
 linkVarToType :: MonadUnify m => Usage -> VName -> StructType -> m ()
 linkVarToType usage vn tp = do
   constraints <- getConstraints
+  (tp', _) <- instantiateEmptyArrayDims (srclocOf usage) Nonrigid $ removeUniqueness tp
   if vn `S.member` typeVars tp
     then typeError usage $ "Occurs check: cannot instantiate " ++
          prettyName vn ++ " with " ++ pretty tp'
@@ -335,8 +351,14 @@ linkVarToType usage vn tp = do
             modifyConstraints $ M.map $ applySubstInConstraint vn $ Subst tp'
             case M.lookup vn constraints of
 
-              Just (NoConstraint (Just Unlifted) unlift_usage) ->
+              Just (NoConstraint (Just Unlifted) unlift_usage) -> do
                 zeroOrderType usage (show unlift_usage) tp'
+
+                when (hasEmptyDims tp) $
+                  typeError usage $ "Type variable " ++ prettyName vn ++ " from\n" ++
+                  indent (show unlift_usage) ++
+                  "\ncannot be instantiated with existentially sized type\n" ++
+                  indent (pretty tp)
 
               Just (Equality _) ->
                 equalityType usage tp'
@@ -391,8 +413,7 @@ linkVarToType usage vn tp = do
 
               _ -> return ()
 
-  where tp' = removeUniqueness tp
-        noSumType = typeError usage "Cannot unify a sum type with a non-sum type"
+  where noSumType = typeError usage "Cannot unify a sum type with a non-sum type"
 
 linkVarToDim :: MonadUnify m => Usage -> VName -> DimDecl VName -> m ()
 linkVarToDim usage vn1 dim = do
