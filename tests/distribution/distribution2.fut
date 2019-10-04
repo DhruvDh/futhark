@@ -36,7 +36,7 @@ let main(num_paths: i32)
         (md_drifts: [][]f64)
         (md_starts: []f64)
         (bb_mat: [][][]f64): [][][]f64 =
-  map (\(bb_row: [][]f64): [][]f64  ->
+  map (\(bb_row: [][]f64) ->
          let noises = correlateDeltas num_paths md_c bb_row
          in  mkPrices(md_starts, md_vols, md_drifts, noises))
        bb_mat

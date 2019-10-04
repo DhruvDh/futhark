@@ -2,7 +2,7 @@
 -- ==
 
 let main [k][m][n] (xs: [k]i32, as: [m][n]f64): [][]f64 =
-  map  (\(e: (i32, []f64)): *[]f64  ->
+  map  (\(e: (i32, []f64))  ->
          unsafe
          let (i, a) = e in
          let a = loop a = copy a for j < n do
