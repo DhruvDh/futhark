@@ -28,7 +28,7 @@ let main(arr: []i32): ([]i32,[][][]i32) =
               ) arr
   in (reduce (\a b -> map2 (+) a b) (
              replicate 3 0) vs,
-      map (\(r: []i32): [][]i32  ->
+      map (\(r: []i32)  ->
              transpose (replicate 5 r)) vs)
 
 

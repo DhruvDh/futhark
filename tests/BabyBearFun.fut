@@ -46,7 +46,7 @@
 --    enddo
 
 
-let min1(a: []i32, b: []i32): []i32 = map (uncurry i32.min) (zip a b)
+let min1 [n] (a: [n]i32, b: [n]i32): [n]i32 = map (uncurry i32.min) (zip a b)
 
 let redmin1(a:  []i32): i32 = reduce i32.min 1200 a
 let redmin2 [n][m] (a: [n][m]i32): [n]i32 = map redmin1 a
