@@ -972,22 +972,23 @@ internaliseScanOrReduce desc what f (lam, ne, arr, loc) = do
   w <- arraysSize 0 <$> mapM lookupType arrs
   letTupExp' desc . I.Op =<< f w lam' nes' arrs
 
-internaliseGenReduce :: String
-                     -> E.Exp -> E.Exp -> E.Exp -> E.Exp -> E.Exp -> SrcLoc
-                     -> InternaliseM [SubExp]
-internaliseGenReduce desc hist op ne buckets img loc = do
-  ne' <- internaliseExp "gen_reduce_ne" ne
-  hist' <- internaliseExpToVars "gen_reduce_hist" hist
-  buckets' <- letExp "gen_reduce_buckets" . BasicOp . SubExp =<<
-              internaliseExp1 "gen_reduce_buckets" buckets
-  img' <- internaliseExpToVars "gen_reduce_img" img
+internaliseHist :: String
+                -> E.Exp -> E.Exp -> E.Exp -> E.Exp -> E.Exp -> E.Exp -> SrcLoc
+                -> InternaliseM [SubExp]
+internaliseHist desc rf hist op ne buckets img loc = do
+  rf' <- internaliseExp1 "hist_rf" rf
+  ne' <- internaliseExp "hist_ne" ne
+  hist' <- internaliseExpToVars "hist_hist" hist
+  buckets' <- letExp "hist_buckets" . BasicOp . SubExp =<<
+              internaliseExp1 "hist_buckets" buckets
+  img' <- internaliseExpToVars "hist_img" img
 
   -- reshape neutral element to have same size as the destination array
   ne_shp <- forM (zip ne' hist') $ \(n, h) -> do
     rowtype <- I.stripArray 1 <$> lookupType h
     ensureShape asserting
       "Row shape of destination array does not match shape of neutral element"
-      loc rowtype "gen_reduce_ne_right_shape" n
+      loc rowtype "hist_ne_right_shape" n
   ne_ts <- mapM I.subExpType ne_shp
   his_ts <- mapM lookupType hist'
   op' <- internaliseFoldLambda internaliseLambda op ne_ts his_ts
@@ -1001,7 +1002,7 @@ internaliseGenReduce desc hist op ne buckets img loc = do
       body = mkBody mempty $ map (I.Var . paramName) params
   body' <- localScope (scopeOfLParams params) $
            ensureResultShape asserting
-           "Row shape of value array does not match row shape of gen_reduce target"
+           "Row shape of value array does not match row shape of hist target"
            (srclocOf img) rettype body
 
   -- get sizes of histogram and image arrays
@@ -1020,7 +1021,7 @@ internaliseGenReduce desc hist op ne buckets img loc = do
     I.BasicOp $ I.Reshape (reshapeOuter [DimCoercion w_img] 1 b_shape) buckets'
 
   letTupExp' desc $ I.Op $
-    I.GenReduce w_img [GenReduceOp w_hist hist' ne_shp op'] (I.Lambda params body' rettype) $ buckets'' : img'
+    I.Hist w_img [HistOp w_hist rf' hist' ne_shp op'] (I.Lambda params body' rettype) $ buckets'' : img'
 
 internaliseStreamMap :: String -> StreamOrd -> E.Exp -> E.Exp
                      -> InternaliseM [SubExp]
@@ -1157,6 +1158,8 @@ internaliseBinOp desc E.Mod x y (E.Signed t) _ =
   simpleBinOp desc (I.SMod t) x y
 internaliseBinOp desc E.Mod x y (E.Unsigned t) _ =
   simpleBinOp desc (I.UMod t) x y
+internaliseBinOp desc E.Mod x y (E.FloatType t) _ =
+  simpleBinOp desc (I.FMod t) x y
 internaliseBinOp desc E.Quot x y (E.Signed t) _ =
   simpleBinOp desc (I.SQuot t) x y
 internaliseBinOp desc E.Quot x y (E.Unsigned t) _ =
@@ -1302,7 +1305,7 @@ isOverloadedFunction qname args ret loc = do
           x' <- internaliseExp1 "x" x
           fmap pure $ letSubExp desc $ I.BasicOp $ I.UnOp unop x'
 
-    handle [x,y] s
+    handle [TupLit [x,y] _] s
       | Just bop <- find ((==s) . pretty) allBinOps = Just $ \desc -> do
           x' <- internaliseExp1 "x" x
           y' <- internaliseExp1 "y" y
@@ -1502,8 +1505,8 @@ isOverloadedFunction qname args ret loc = do
     handle [TupLit [f, arr] _] "map_stream_per" = Just $ \desc ->
       internaliseStreamMap desc Disorder f arr
 
-    handle [TupLit [dest, op, ne, buckets, img] _] "gen_reduce" = Just $ \desc ->
-      internaliseGenReduce desc dest op ne buckets img loc
+    handle [TupLit [rf, dest, op, ne, buckets, img] _] "hist" = Just $ \desc ->
+      internaliseHist desc rf dest op ne buckets img loc
 
     handle [x] "unzip" = Just $ flip internaliseExp x
     handle [x] "trace" = Just $ flip internaliseExp x

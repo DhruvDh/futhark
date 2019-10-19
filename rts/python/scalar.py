@@ -305,6 +305,12 @@ def futhark_lgamma64(x):
 def futhark_round64(x):
   return np.round(x)
 
+def futhark_ceil64(x):
+  return np.ceil(x)
+
+def futhark_floor64(x):
+  return np.floor(x)
+
 def futhark_isnan64(x):
   return np.isnan(x)
 
@@ -364,6 +370,12 @@ def futhark_lgamma32(x):
 def futhark_round32(x):
   return np.round(x)
 
+def futhark_ceil32(x):
+  return np.ceil(x)
+
+def futhark_floor32(x):
+  return np.floor(x)
+
 def futhark_isnan32(x):
   return np.isnan(x)
 
@@ -377,5 +389,11 @@ def futhark_to_bits32(x):
 def futhark_from_bits32(x):
   s = struct.pack('>l', x)
   return np.float32(struct.unpack('>f', s)[0])
+
+def futhark_lerp32(v0, v1, t):
+  return v0 + (v1-v0)*t
+
+def futhark_lerp64(v0, v1, t):
+  return v0 + (v1-v0)*t
 
 # End of scalar.py.

@@ -16,7 +16,6 @@ module Futhark.CodeGen.Backends.SimpleRepresentation
   , cFloat32Ops, cFloat32Funs
   , cFloat64Ops, cFloat64Funs
   , cFloatConvOps
-
   )
   where
 
@@ -24,7 +23,7 @@ import qualified Language.C.Syntax as C
 import qualified Language.C.Quote.C as C
 
 import Futhark.CodeGen.ImpCode
-import Futhark.Util.Pretty (pretty, prettyOneLine)
+import Futhark.Util.Pretty (prettyOneLine)
 import Futhark.Util (zEncodeString)
 
 -- | The C type corresponding to a signed integer type.
@@ -238,8 +237,8 @@ cFloatConvOps :: [C.Definition]
         mkFAdd = simpleFloatOp "fadd" [C.cexp|x + y|]
         mkFSub = simpleFloatOp "fsub" [C.cexp|x - y|]
         mkFMul = simpleFloatOp "fmul" [C.cexp|x * y|]
-        mkFMin = simpleFloatOp "fmin" [C.cexp|x < y ? x : y|]
-        mkFMax = simpleFloatOp "fmax" [C.cexp|x < y ? y : x|]
+        mkFMin = simpleFloatOp "fmin" [C.cexp|fmin(x, y)|]
+        mkFMax = simpleFloatOp "fmax" [C.cexp|fmax(x, y)|]
         mkCmpLt = floatCmpOp "cmplt" [C.cexp|x < y|]
         mkCmpLe = floatCmpOp "cmple" [C.cexp|x <= y|]
 
@@ -325,10 +324,6 @@ cFloat32Funs = [C.cunit|
       return lgamma(x);
     }
 
-    static inline float $id:(funName' "round32")(float x) {
-      return rint(x);
-    }
-
     static inline char $id:(funName' "isnan32")(float x) {
       return isnan(x);
     }
@@ -354,6 +349,40 @@ cFloat32Funs = [C.cunit|
       p.f = x;
       return p.t;
     }
+
+$esc:("#ifdef __OPENCL_VERSION__")
+    static inline float fmod32(float x, float y) {
+      return fmod(x, y);
+    }
+    static inline float $id:(funName' "round32")(float x) {
+      return rint(x);
+    }
+    static inline float $id:(funName' "floor32")(float x) {
+      return floor(x);
+    }
+    static inline float $id:(funName' "ceil32")(float x) {
+      return ceil(x);
+    }
+    static inline float $id:(funName' "lerp32")(float v0, float v1, float t) {
+      return mix(v0, v1, t);
+    }
+$esc:("#else")
+    static inline float fmod32(float x, float y) {
+      return fmodf(x, y);
+    }
+    static inline float $id:(funName' "round32")(float x) {
+      return rintf(x);
+    }
+    static inline float $id:(funName' "floor32")(float x) {
+      return floorf(x);
+    }
+    static inline float $id:(funName' "ceil32")(float x) {
+      return ceilf(x);
+    }
+    static inline float $id:(funName' "lerp32")(float v0, float v1, float t) {
+      return v0 + (v1-v0)*t;
+    }
+$esc:("#endif")
 |]
 
 cFloat64Funs :: [C.Definition]
@@ -418,6 +447,14 @@ cFloat64Funs = [C.cunit|
       return rint(x);
     }
 
+    static inline double $id:(funName' "ceil64")(double x) {
+      return ceil(x);
+    }
+
+    static inline double $id:(funName' "floor64")(double x) {
+      return floor(x);
+    }
+
     static inline char $id:(funName' "isnan64")(double x) {
       return isnan(x);
     }
@@ -443,4 +480,18 @@ cFloat64Funs = [C.cunit|
       p.f = x;
       return p.t;
     }
+
+    static inline float fmod64(float x, float y) {
+      return fmod(x, y);
+    }
+
+$esc:("#ifdef __OPENCL_VERSION__")
+    static inline double $id:(funName' "lerp64")(double v0, double v1, double t) {
+      return mix(v0, v1, t);
+    }
+$esc:("#else")
+    static inline double $id:(funName' "lerp64")(double v0, double v1, double t) {
+      return v0 + (v1-v0)*t;
+    }
+$esc:("#endif")
 |]

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 
+### Removed
+
+### Changed
+
+### Fixed
+
+## [0.12.2]
+
+### Added
+
   * New tool: `futhark autotune`, for tuning the threshold parameters
     used by incremental flattening.  Based on work by Svend Lund
     Breddam, Simon Rotendahl, and Carl Mathias Graae Larsen.
@@ -16,9 +26,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   * New tool: `futhark dataget`, for extracting test input data.  Most
     will probably never use this.
 
-### Removed
+  * Programs compiled with the `cuda` backend now take options
+    `--default-group-size`, `--default-num-groups`, and
+    `--default-tile-size`.
 
-### Changed
+  * Segmented `reduce_by_index` are now substantially fasted for small
+    histograms.
+
+  * New functions: `f32.lerp` and `f64.lerp`, for linear interpolation.
 
 ### Fixed
 
@@ -34,6 +49,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   * Function parameters are no longer in scope of themselves (#798).
 
   * Fixed a nasty out-of-bounds error in handling of irregular allocations.
+
+  * The `floor`/`ceil` functions in `f32`/`f64` now handle infinities
+    correctly (and are also faster).
+
+  * Using `%` on floats now computes fmod instead of crashing the compiler.
 
 ## [0.12.1]
 

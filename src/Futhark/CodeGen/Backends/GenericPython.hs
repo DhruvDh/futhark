@@ -61,7 +61,6 @@ import qualified Futhark.CodeGen.ImpCode as Imp
 import Futhark.CodeGen.Backends.GenericPython.AST
 import Futhark.CodeGen.Backends.GenericPython.Options
 import Futhark.CodeGen.Backends.GenericPython.Definitions
-import Futhark.Util.Pretty(pretty)
 import Futhark.Util (zEncodeString)
 import Futhark.Representation.AST.Attributes (builtInFunctions, isBuiltInFunction)
 
@@ -131,21 +130,21 @@ defaultOperations = Operations { opsWriteScalar = defWriteScalar
                                , opsEntryInput = defEntryInput
                                }
   where defWriteScalar _ _ _ _ _ =
-          fail "Cannot write to non-default memory space because I am dumb"
+          error "Cannot write to non-default memory space because I am dumb"
         defReadScalar _ _ _ _ =
-          fail "Cannot read from non-default memory space"
+          error "Cannot read from non-default memory space"
         defAllocate _ _ _ =
-          fail "Cannot allocate in non-default memory space"
+          error "Cannot allocate in non-default memory space"
         defCopy _ _ _ _ _ _ _ _ =
-          fail "Cannot copy to or from non-default memory space"
+          error "Cannot copy to or from non-default memory space"
         defStaticArray _ _ _ _ =
-          fail "Cannot create static array in non-default memory space"
+          error "Cannot create static array in non-default memory space"
         defCompiler _ =
-          fail "The default compiler cannot compile extended operations"
+          error "The default compiler cannot compile extended operations"
         defEntryOutput _ _ _ _ =
-          fail "Cannot return array not in default memory space"
+          error "Cannot return array not in default memory space"
         defEntryInput _ _ _ _ =
-          fail "Cannot accept array not in default memory space"
+          error "Cannot accept array not in default memory space"
 
 data CompilerEnv op s = CompilerEnv {
     envOperations :: Operations op s
@@ -804,6 +803,7 @@ compileExp (Imp.BinOpExp op x y) = do
     FSub{} -> simple "-"
     FMul{} -> simple "*"
     FDiv{} -> simple "/"
+    FMod{} -> simple "%"
     Xor{} -> simple "^"
     And{} -> simple "&"
     Or{} -> simple "|"

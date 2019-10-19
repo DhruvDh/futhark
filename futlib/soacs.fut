@@ -119,7 +119,7 @@ let reduce_comm [n] 'a (op: a -> a -> a) (ne: a) (as: [n]a): a =
 -- In practice, the *O(n)* behaviour only occurs if *m* is also very
 -- large.
 let reduce_by_index 'a [m] [n] (dest : *[m]a) (f : a -> a -> a) (ne : a) (is : [n]i32) (as : [n]a) : *[m]a =
-  intrinsics.gen_reduce (dest, f, ne, is, as) : *[m]a
+  intrinsics.hist (1, dest, f, ne, is, as) : *[m]a
 
 -- | Inclusive prefix scan.  Has the same caveats with respect to
 -- associativity as `reduce`.

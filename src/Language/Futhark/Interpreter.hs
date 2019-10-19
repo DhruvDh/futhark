@@ -23,7 +23,7 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import qualified Control.Monad.Fail as Fail
 import Data.Array
-import Data.Bifunctor (bimap)
+import Data.Bifunctor (first)
 import Data.List hiding (break)
 import Data.Maybe
 import qualified Data.Map as M
@@ -528,8 +528,8 @@ evalType env t@(Scalar (TypeVar () _ tn args)) =
       let (substs, types) = mconcat $ zipWith matchPtoA ps args
           onDim (NamedDim v) = fromMaybe (NamedDim v) $ M.lookup (qualLeaf v) substs
           onDim d = d
-      in if null ps then bimap onDim id t'
-         else evalType (Env mempty types mempty <> env) $ bimap onDim id t'
+      in if null ps then first onDim t'
+         else evalType (Env mempty types mempty <> env) $ first onDim t'
     Nothing -> t
 
   where matchPtoA (TypeParamDim p _) (TypeArgDim (NamedDim qv) _) =
@@ -834,7 +834,7 @@ substituteInModule substs = onModule
       ModuleFun $ \m -> onModule <$> f (substituteInModule rev_substs m)
     onTerm (TermValue t v) = TermValue t v
     onTerm (TermModule m) = TermModule $ onModule m
-    onType (T.TypeAbbr l ps t) = T.TypeAbbr l ps $ bimap onDim id t
+    onType (T.TypeAbbr l ps t) = T.TypeAbbr l ps $ first onDim t
     onDim (NamedDim v) = NamedDim $ replaceQ v
     onDim (ConstDim x) = ConstDim x
     onDim AnyDim = AnyDim
@@ -996,10 +996,10 @@ initialCtx =
       case fromTuple v of Just [x,y,z] -> f x y z
                           _ -> error $ "Expected triple; got: " ++ pretty v
 
-    fun5t f =
+    fun6t f =
       TermValue Nothing $ ValueFun $ \v ->
-      case fromTuple v of Just [x,y,z,a,b] -> f x y z a b
-                          _ -> error $ "Expected quintuple; got: " ++ pretty v
+      case fromTuple v of Just [x,y,z,a,b,c] -> f x y z a b c
+                          _ -> error $ "Expected sextuple; got: " ++ pretty v
 
     bopDef fs = fun2 $ \x y ->
       case (x, y) of
@@ -1026,6 +1026,17 @@ initialCtx =
               x' <- valf x
               retf =<< op x'
 
+    tbopDef f = fun1 $ \v ->
+      case fromTuple v of
+        Just [ValuePrim x, ValuePrim y]
+          | Just x' <- getV x,
+            Just y' <- getV y,
+            Just z <- f x' y' ->
+              return $ ValuePrim $ putV z
+        _ ->
+          bad noLoc mempty $ "Cannot apply operator to argument `" <>
+          pretty v <> "."
+
     def "!" = Just $ unopDef [ (getS, putS, P.doUnOp $ P.Complement Int8)
                              , (getS, putS, P.doUnOp $ P.Complement Int16)
                              , (getS, putS, P.doUnOp $ P.Complement Int32)
@@ -1041,7 +1052,7 @@ initialCtx =
     def "*" = arithOp P.Mul P.FMul
     def "**" = arithOp P.Pow P.FPow
     def "/" = Just $ bopDef $ sintOp P.SDiv ++ uintOp P.UDiv ++ floatOp P.FDiv
-    def "%" = Just $ bopDef $ sintOp P.SMod ++ uintOp P.UMod
+    def "%" = Just $ bopDef $ sintOp P.SMod ++ uintOp P.UMod ++ floatOp P.FMod
     def "//" = Just $ bopDef $ sintOp P.SQuot ++ uintOp P.UDiv
     def "%%" = Just $ bopDef $ sintOp P.SRem ++ uintOp P.UMod
     def "^" = Just $ bopDef $ intOp P.Xor
@@ -1075,18 +1086,25 @@ initialCtx =
 
     def s
       | Just bop <- find ((s==) . pretty) P.allBinOps =
-          Just $ bopDef [(getV, Just . putV, P.doBinOp bop)]
+          Just $ tbopDef $ P.doBinOp bop
+      | Just unop <- find ((s==) . pretty) P.allCmpOps =
+          Just $ tbopDef $ \x y -> P.BoolValue <$> P.doCmpOp unop x y
       | Just cop <- find ((s==) . pretty) P.allConvOps =
           Just $ unopDef [(getV, Just . putV, P.doConvOp cop)]
       | Just unop <- find ((s==) . pretty) P.allUnOps =
           Just $ unopDef [(getV, Just . putV, P.doUnOp unop)]
-      | Just unop <- find ((s==) . pretty) P.allCmpOps =
-          Just $ bopDef [(getV, bool, P.doCmpOp unop)]
 
       | Just (pts, _, f) <- M.lookup s P.primFuns =
           case length pts of
             1 -> Just $ unopDef [(getV, Just . putV, f . pure)]
-            _ -> Just $ bopDef [(getV, Just . putV, \x y -> f [x,y])]
+            _ -> Just $ fun1 $ \x -> do
+              let getV' (ValuePrim v) = getV v
+                  getV' _ = Nothing
+              case f =<< mapM getV' =<< fromTuple x of
+                Just res ->
+                  return $ ValuePrim $ putV res
+                _ ->
+                  error $ "Cannot apply " ++ pretty s ++ " to " ++ pretty x
 
       | "sign_" `isPrefixOf` s =
           Just $ fun1 $ \x ->
@@ -1098,7 +1116,6 @@ initialCtx =
           case x of (ValuePrim (SignedValue x')) ->
                       return $ ValuePrim $ UnsignedValue x'
                     _ -> error $ "Cannot unsign: " ++ pretty x
-      where bool = Just . BoolValue
 
     def s | "map_stream" `isPrefixOf` s =
               Just $ fun2t stream
@@ -1129,13 +1146,13 @@ initialCtx =
               if i >= 0 && i < arrayLength arr'
               then arr' // [(i, v)] else arr'
 
-    def "gen_reduce" = Just $ fun5t $ \arr fun _ is vs ->
+    def "hist" = Just $ fun6t $ \_ arr fun _ is vs ->
       case arr of
         ValueArray arr' ->
           ValueArray <$> foldM (update fun) arr'
           (zip (map asInt $ fromArray is) (fromArray vs))
         _ ->
-          error $ "gen_reduce expects array, but got: " ++ pretty arr
+          error $ "hist expects array, but got: " ++ pretty arr
       where update fun arr' (i, v) =
               if i >= 0 && i < arrayLength arr'
               then do

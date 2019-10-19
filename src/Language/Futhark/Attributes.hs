@@ -163,7 +163,7 @@ anyDimShapeAnnotations = modifyShapeAnnotations $ const AnyDim
 modifyShapeAnnotations :: (oldshape -> newshape)
                        -> TypeBase oldshape as
                        -> TypeBase newshape as
-modifyShapeAnnotations f = bimap f id
+modifyShapeAnnotations = first
 
 -- | Return the uniqueness of a type.
 uniqueness :: TypeBase shape as -> Uniqueness
@@ -241,7 +241,7 @@ arrayOfWithAliases :: Monoid as =>
 arrayOfWithAliases (Array as1 _ et shape1) as2 shape2 u =
   Array (as1<>as2) u et (shape2 <> shape1)
 arrayOfWithAliases (Scalar t) as shape u =
-  Array as u (bimap id (const ()) t) shape
+  Array as u (second (const ()) t) shape
 
 -- | @stripArray n t@ removes the @n@ outermost layers of the array.
 -- Essentially, it is the type of indexing an array of type @t@ with
@@ -328,7 +328,7 @@ setAliases t = addAliases t . const
 -- aliasing replaced by @f@ applied to that aliasing.
 addAliases :: TypeBase dim asf -> (asf -> ast)
            -> TypeBase dim ast
-addAliases t f = bimap id f t
+addAliases = flip second
 
 intValueType :: IntValue -> IntType
 intValueType Int8Value{}  = Int8
@@ -638,13 +638,14 @@ intrinsics = M.fromList $ zipWith namify [10..] $
               ("zip", IntrinsicPolyFun [tp_a, tp_b] [arr_a, arr_b] arr_a_b),
               ("unzip", IntrinsicPolyFun [tp_a, tp_b] [arr_a_b] t_arr_a_arr_b),
 
-              ("gen_reduce", IntrinsicPolyFun [tp_a]
-                             [uarr_a,
-                              Scalar t_a `arr` (Scalar t_a `arr` Scalar t_a),
-                              Scalar t_a,
-                              Array () Nonunique (Prim $ Signed Int32) (rank 1),
-                              arr_a]
-                             uarr_a),
+              ("hist", IntrinsicPolyFun [tp_a]
+                       [Scalar $ Prim $ Signed Int32,
+                        uarr_a,
+                        Scalar t_a `arr` (Scalar t_a `arr` Scalar t_a),
+                        Scalar t_a,
+                        Array () Nonunique (Prim $ Signed Int32) (rank 1),
+                        arr_a]
+                       uarr_a),
 
               ("map", IntrinsicPolyFun [tp_a, tp_b] [Scalar t_a `arr` Scalar t_b, arr_a] uarr_b),
 
@@ -767,8 +768,8 @@ intrinsics = M.fromList $ zipWith namify [10..] $
         intrinsicBinOp Band     = binOp anyIntType
         intrinsicBinOp Xor      = binOp anyIntType
         intrinsicBinOp Bor      = binOp anyIntType
-        intrinsicBinOp LogAnd   = Just $ IntrinsicMonoFun [Bool,Bool] Bool
-        intrinsicBinOp LogOr    = Just $ IntrinsicMonoFun [Bool,Bool] Bool
+        intrinsicBinOp LogAnd   = binOp [Bool]
+        intrinsicBinOp LogOr    = binOp [Bool]
         intrinsicBinOp Equal    = Just IntrinsicEquality
         intrinsicBinOp NotEqual = Just IntrinsicEquality
         intrinsicBinOp Less     = ordering
